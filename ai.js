@@ -4,33 +4,30 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const userMode = {}; // simpan mode user
+const userMode = {};
 
 async function handleAI(userId, message) {
   const mode18 = userMode[userId] || false;
 
-  let systemPrompt = "Kamu adalah AI WhatsApp yang santai dan membantu.";
+  let systemPrompt = "Kamu adalah AI WhatsApp santai.";
 
   if (mode18) {
-    systemPrompt += " Mode 18+ aktif, jawab lebih bebas tapi tetap tidak melanggar aturan.";
+    systemPrompt += " Mode 18+ aktif, jawab lebih bebas.";
   }
 
-  const response = await openai.chat.completions.create({
+  const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: systemPrompt },
-      { role: "user", content: message },
-    ],
+      { role: "user", content: message }
+    ]
   });
 
-  return response.choices[0].message.content;
+  return res.choices[0].message.content;
 }
 
 function setMode18(userId, state) {
   userMode[userId] = state;
 }
 
-module.exports = {
-  handleAI,
-  setMode18,
-};
+module.exports = { handleAI, setMode18 };
