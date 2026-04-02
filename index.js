@@ -2,6 +2,7 @@ const makeWASocket = require("@whiskeysockets/baileys").default;
 const { useMultiFileAuthState } = require("@whiskeysockets/baileys");
 const qrcode = require("qrcode");
 const express = require("express");
+const fs = require("fs");
 
 const { handleAI } = require("./ai");
 const { PREFIX } = require("./config");
@@ -9,13 +10,19 @@ const mode18 = require("./commands/mode18");
 
 const commands = { mode18 };
 
+// ===== RESET SESSION BIAR GAK STUCK
+if (fs.existsSync("./session")) {
+  fs.rmSync("./session", { recursive: true, force: true });
+  console.log("Session lama dihapus 🔥");
+}
+
 // ===== EXPRESS QR WEB
 const app = express();
 let qrCodeData = null;
 
 app.get("/", async (req, res) => {
   if (!qrCodeData) {
-    return res.send("QR belum ready... tunggu bentar ⏳");
+    return res.send("QR belum siap, tunggu bentar...");
   }
 
   try {
@@ -25,7 +32,7 @@ app.get("/", async (req, res) => {
       <img src="${qrImage}" />
     `);
   } catch (err) {
-    res.send("Gagal generate QR");
+    res.send("QR error");
   }
 });
 
@@ -35,7 +42,8 @@ async function startBot() {
 
   const sock = makeWASocket({
     auth: state,
-    printQRInTerminal: false,
+    printQRInTerminal: true, // WAJIB
+    browser: ["Railway Bot", "Chrome", "1.0.0"],
   });
 
   sock.ev.on("creds.update", saveCreds);
@@ -44,17 +52,18 @@ async function startBot() {
     const { connection, qr } = update;
 
     if (qr) {
-      console.log("QR BARU 🔥");
-      qrCodeData = qr; // tampil di web
+      console.log("QR DAPET 🔥");
+      qrCodeData = qr;
     }
 
     if (connection === "open") {
       console.log("BOT CONNECTED ✅");
-      qrCodeData = null; // hilangin QR setelah login
+      qrCodeData = null;
     }
 
     if (connection === "close") {
-      console.log("KONEKSI PUTUS ❌");
+      console.log("RECONNECTING...");
+      startBot();
     }
   });
 
@@ -82,7 +91,7 @@ async function startBot() {
       }
     }
 
-    // ===== PRIVATE AUTO AI
+    // ===== PRIVATE AI
     if (!sender.includes("@g.us")) {
       try {
         const reply = await handleAI(sender, text);
