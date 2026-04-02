@@ -2,16 +2,16 @@ const { setMode18 } = require("../ai");
 
 module.exports = {
   name: "mode18",
-  execute: async (client, msg, args) => {
-    const userId = msg.from;
+  execute: async (sock, msg, args) => {
+    const sender = msg.key.remoteJid;
     const state = args[0] === "on";
 
-    setMode18(userId, state);
+    setMode18(sender, state);
 
-    await msg.reply(
-      state
+    await sock.sendMessage(sender, {
+      text: state
         ? "Mode 18+ aktif 🔥"
-        : "Mode 18+ dimatikan ❄️"
-    );
+        : "Mode 18+ mati ❄️",
+    });
   },
 };
