@@ -1,98 +1,84 @@
-const { Client, LocalAuth } = require("whatsapp-web.js");
+const makeWASocket = require("@whiskeysockets/baileys").default;
+const { useMultiFileAuthState } = require("@whiskeysockets/baileys");
 const qrcode = require("qrcode");
 const express = require("express");
 
 const { handleAI } = require("./ai");
 const { PREFIX } = require("./config");
-
-// command
 const mode18 = require("./commands/mode18");
 
-const commands = {
-  mode18,
-};
+const commands = { mode18 };
 
-// ===== EXPRESS (QR LINK)
+// ===== EXPRESS QR LINK
 const app = express();
 let qrCodeData = "";
 
 app.get("/", async (req, res) => {
-  if (!qrCodeData) return res.send("QR belum ready...");
-  const qrImage = await qrcode.toDataURL(qrCodeData);
-  res.send(`<img src="${qrImage}" />`);
+  if (!qrCodeData) return res.send("QR belum ada...");
+  const qr = await qrcode.toDataURL(qrCodeData);
+  res.send(`<img src="${qr}" />`);
 });
 
-// ===== FIX CHROME PATH (RAILWAY)
-process.env.CHROME_BIN = "/usr/bin/chromium-browser";
+async function startBot() {
+  const { state, saveCreds } = await useMultiFileAuthState("session");
 
-// ===== WHATSAPP CLIENT
-const client = new Client({
-  authStrategy: new LocalAuth(),
-  puppeteer: {
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--no-first-run",
-      "--no-zygote",
-      "--single-process"
-    ]
-  }
-});
+  const sock = makeWASocket({
+    auth: state,
+  });
 
-client.on("qr", (qr) => {
-  qrCodeData = qr;
-  console.log("QR READY - buka link Railway lu");
-});
+  sock.ev.on("creds.update", saveCreds);
 
-client.on("ready", () => {
-  console.log("BOT SIAP 🔥");
-});
-
-// ===== MESSAGE HANDLER
-client.on("message", async (msg) => {
-  const text = msg.body;
-
-  // ===== COMMAND
-  if (text.startsWith(PREFIX)) {
-    const args = text.slice(1).split(" ");
-    const commandName = args.shift().toLowerCase();
-
-    const command = commands[commandName];
-    if (command) {
-      return command.execute(client, msg, args);
+  sock.ev.on("connection.update", ({ connection, qr }) => {
+    if (qr) {
+      qrCodeData = qr;
+      console.log("QR READY 🔥 buka link railway");
     }
-  }
 
-  // ===== PRIVATE CHAT (AUTO AI)
-  if (!msg.from.includes("@g.us")) {
-    try {
-      const reply = await handleAI(msg.from, text);
-      return msg.reply(reply);
-    } catch (err) {
-      return msg.reply("AI error ❌");
+    if (connection === "open") {
+      console.log("BOT CONNECTED ✅");
     }
-  }
+  });
 
-  // ===== GROUP (HARUS REPLY ATAU COMMAND)
-  if (msg.from.includes("@g.us")) {
-    if (msg.hasQuotedMsg) {
-      try {
-        const reply = await handleAI(msg.from, text);
-        return msg.reply(reply);
-      } catch (err) {
-        return msg.reply("AI error ❌");
+  sock.ev.on("messages.upsert", async (m) => {
+    const msg = m.messages[0];
+    if (!msg.message) return;
+
+    const text =
+      msg.message.conversation ||
+      msg.message.extendedTextMessage?.text;
+
+    const sender = msg.key.remoteJid;
+
+    // ===== COMMAND
+    if (text?.startsWith(PREFIX)) {
+      const args = text.slice(1).split(" ");
+      const cmd = args.shift().toLowerCase();
+
+      if (commands[cmd]) {
+        return commands[cmd].execute(sock, msg, args);
       }
     }
-  }
-});
 
-client.initialize();
+    // ===== PRIVATE AUTO AI
+    if (!sender.includes("@g.us")) {
+      const reply = await handleAI(sender, text);
+      await sock.sendMessage(sender, { text: reply });
+    }
 
-// ===== START SERVER
+    // ===== GROUP (HARUS REPLY)
+    if (sender.includes("@g.us")) {
+      if (msg.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
+        const reply = await handleAI(sender, text);
+        await sock.sendMessage(sender, { text: reply });
+      }
+    }
+  });
+}
+
+startBot();
+
+// ===== SERVER
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log("Web QR jalan di port " + PORT);
+  console.log("QR Web jalan di " + PORT);
 });
