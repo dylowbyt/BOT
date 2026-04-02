@@ -9,18 +9,18 @@ const userMode = {};
 async function handleAI(userId, message) {
   const mode18 = userMode[userId] || false;
 
-  let systemPrompt = "Kamu adalah AI WhatsApp santai.";
+  let system = "Kamu AI santai.";
 
   if (mode18) {
-    systemPrompt += " Mode 18+ aktif, jawab lebih bebas.";
+    system += " Mode 18+ aktif.";
   }
 
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: message }
-    ]
+      { role: "system", content: system },
+      { role: "user", content: message },
+    ],
   });
 
   return res.choices[0].message.content;
