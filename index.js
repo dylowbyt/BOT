@@ -9,33 +9,52 @@ const mode18 = require("./commands/mode18");
 
 const commands = { mode18 };
 
-// ===== EXPRESS QR LINK
+// ===== EXPRESS QR WEB
 const app = express();
-let qrCodeData = "";
+let qrCodeData = null;
 
 app.get("/", async (req, res) => {
-  if (!qrCodeData) return res.send("QR belum ada...");
-  const qr = await qrcode.toDataURL(qrCodeData);
-  res.send(`<img src="${qr}" />`);
+  if (!qrCodeData) {
+    return res.send("QR belum ready... tunggu bentar ⏳");
+  }
+
+  try {
+    const qrImage = await qrcode.toDataURL(qrCodeData);
+    res.send(`
+      <h2>Scan QR WhatsApp</h2>
+      <img src="${qrImage}" />
+    `);
+  } catch (err) {
+    res.send("Gagal generate QR");
+  }
 });
 
+// ===== START BOT
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("session");
 
   const sock = makeWASocket({
     auth: state,
+    printQRInTerminal: false,
   });
 
   sock.ev.on("creds.update", saveCreds);
 
-  sock.ev.on("connection.update", ({ connection, qr }) => {
+  sock.ev.on("connection.update", async (update) => {
+    const { connection, qr } = update;
+
     if (qr) {
-      qrCodeData = qr;
-      console.log("QR READY 🔥 buka link railway");
+      console.log("QR BARU 🔥");
+      qrCodeData = qr; // tampil di web
     }
 
     if (connection === "open") {
       console.log("BOT CONNECTED ✅");
+      qrCodeData = null; // hilangin QR setelah login
+    }
+
+    if (connection === "close") {
+      console.log("KONEKSI PUTUS ❌");
     }
   });
 
@@ -47,10 +66,14 @@ async function startBot() {
       msg.message.conversation ||
       msg.message.extendedTextMessage?.text;
 
+    if (!text) return;
+
     const sender = msg.key.remoteJid;
 
+    console.log("MSG:", text);
+
     // ===== COMMAND
-    if (text?.startsWith(PREFIX)) {
+    if (text.startsWith(PREFIX)) {
       const args = text.slice(1).split(" ");
       const cmd = args.shift().toLowerCase();
 
@@ -61,15 +84,23 @@ async function startBot() {
 
     // ===== PRIVATE AUTO AI
     if (!sender.includes("@g.us")) {
-      const reply = await handleAI(sender, text);
-      await sock.sendMessage(sender, { text: reply });
+      try {
+        const reply = await handleAI(sender, text);
+        await sock.sendMessage(sender, { text: reply });
+      } catch {
+        await sock.sendMessage(sender, { text: "AI error ❌" });
+      }
     }
 
     // ===== GROUP (HARUS REPLY)
     if (sender.includes("@g.us")) {
       if (msg.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
-        const reply = await handleAI(sender, text);
-        await sock.sendMessage(sender, { text: reply });
+        try {
+          const reply = await handleAI(sender, text);
+          await sock.sendMessage(sender, { text: reply });
+        } catch {
+          await sock.sendMessage(sender, { text: "AI error ❌" });
+        }
       }
     }
   });
