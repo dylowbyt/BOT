@@ -5,8 +5,9 @@ const express = require("express");
 const { handleAI } = require("./ai");
 const { PREFIX } = require("./config");
 
-// load commands
+// command
 const mode18 = require("./commands/mode18");
+
 const commands = {
   mode18,
 };
@@ -21,21 +22,33 @@ app.get("/", async (req, res) => {
   res.send(`<img src="${qrImage}" />`);
 });
 
+// ===== FIX CHROME PATH (RAILWAY)
+process.env.CHROME_BIN = "/usr/bin/chromium-browser";
+
 // ===== WHATSAPP CLIENT
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  },
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--no-first-run",
+      "--no-zygote",
+      "--single-process"
+    ]
+  }
 });
 
 client.on("qr", (qr) => {
   qrCodeData = qr;
-  console.log("QR ready, buka link Railway lu");
+  console.log("QR READY - buka link Railway lu");
 });
 
 client.on("ready", () => {
-  console.log("Bot siap!");
+  console.log("BOT SIAP 🔥");
 });
 
 // ===== MESSAGE HANDLER
@@ -53,17 +66,25 @@ client.on("message", async (msg) => {
     }
   }
 
-  // ===== AI CHAT (PRIVATE AUTO)
+  // ===== PRIVATE CHAT (AUTO AI)
   if (!msg.from.includes("@g.us")) {
-    const reply = await handleAI(msg.from, text);
-    return msg.reply(reply);
-  }
-
-  // ===== GROUP RULE
-  if (msg.from.includes("@g.us")) {
-    if (msg.hasQuotedMsg) {
+    try {
       const reply = await handleAI(msg.from, text);
       return msg.reply(reply);
+    } catch (err) {
+      return msg.reply("AI error ❌");
+    }
+  }
+
+  // ===== GROUP (HARUS REPLY ATAU COMMAND)
+  if (msg.from.includes("@g.us")) {
+    if (msg.hasQuotedMsg) {
+      try {
+        const reply = await handleAI(msg.from, text);
+        return msg.reply(reply);
+      } catch (err) {
+        return msg.reply("AI error ❌");
+      }
     }
   }
 });
