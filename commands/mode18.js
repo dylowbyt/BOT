@@ -1,4 +1,4 @@
-const { setMode18 } = require("../18");
+const { setMode18 } = require("../ai");
 
 module.exports = {
   name: "mode18",
